@@ -1,6 +1,7 @@
 # main.py
 import logging
 import re
+from collections import defaultdict
 from urllib.parse import urljoin
 
 import requests_cache
@@ -9,6 +10,7 @@ from tqdm import tqdm
 
 from constants import BASE_DIR, EXPECTED_STATUS, MAIN_DOC_URL, MAIN_PEP_URL
 from configs import configure_argument_parser, configure_logging
+from exceptions import EmptyListFromFindAll
 from outputs import control_output
 from utils import get_response, find_tag
 
@@ -55,8 +57,8 @@ def latest_versions(session):
         if 'All versions' in ul.text:
             a_tags = ul.find_all('a')
             break
-        else:
-            raise Exception('Ничего не нашлось')
+    else:
+        raise EmptyListFromFindAll('Ничего не нашлось')
 
     result = [('Ссылка на документацию', 'Версия', 'Статус')]
     pattern = r'Python (?P<version>\d\.\d+) \((?P<status>.*)\)'
@@ -110,9 +112,9 @@ def pep(session):
         rows_from_all_tables.extend(table.find_all('tr'))
 
     result = [('Статус', 'Количество')]
-    count_pep_per_status = {}
+    count_pep_per_status = defaultdict(int)
     mismatched_statuses = []
-    for row in rows_from_all_tables:
+    for row in tqdm(rows_from_all_tables):
         pep_a_tag = find_tag(row, 'a')
         href = pep_a_tag['href']
         pep_link = urljoin(MAIN_PEP_URL, href)
@@ -122,7 +124,6 @@ def pep(session):
         status_in_table = EXPECTED_STATUS.get(find_tag(row, 'td').text[1:2])
         dl_in_card = find_tag(soup, 'dl')
         status_in_card = find_tag(dl_in_card, 'abbr').text
-        count_pep_per_status.setdefault(status_in_card, 0)
         count_pep_per_status[status_in_card] += 1
 
         if status_in_card not in status_in_table:
